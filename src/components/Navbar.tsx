@@ -1,30 +1,52 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import PocketBase from 'pocketbase';
-import { FaHome, FaTachometerAlt, FaTasks, FaMoneyBillWave, FaUser, FaLifeRing, FaSignOutAlt } from "react-icons/fa";
+import PocketBase from "pocketbase";
+import {
+  FaHome,
+  FaTachometerAlt,
+  FaTasks,
+  FaMoneyBillWave,
+  FaUser,
+  FaLifeRing,
+  FaSignOutAlt,
+} from "react-icons/fa";
 
 // Initialize PocketBase client outside the component
-const pb = new PocketBase('https://zenithdb.fly.dev');
+const pb = new PocketBase("https://zenithdb.fly.dev");
 
 function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(pb.authStore.isValid);
 
   // Set up auth store listener
   useEffect(() => {
     const unsubscribe = pb.authStore.onChange(() => {
       setIsLoggedIn(pb.authStore.isValid);
-      setUser(pb.authStore.model);
+
+      const fetchUser = async () => {
+        const record = await pb
+          .collection("users")
+          .getOne(pb.authStore.model.id, {
+            expand: "relField1,relField2.subRelField",
+          });
+
+        // console.log(record);
+
+        setUser(record.username);
+      };
+
+      fetchUser();
+
+      setUser(pb.authStore.model.id);
     }, true); // Trigger immediately with current state
 
     return () => unsubscribe();
   }, []);
 
   const navItems = [
-    { name: "Home", path: "/", public: true },
     { name: "Dashboard", path: "/dashboard", public: false },
     { name: "Tasks", path: "/tasks", public: false },
     { name: "Profit", path: "/profit", public: false },
@@ -61,25 +83,29 @@ function Navbar() {
                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center mr-3">
                   <span className="text-blue-600 font-bold text-lg">Z</span>
                 </div>
-                <span className="text-white text-xl font-bold">Zenith Agency</span>
+                <span className="text-white text-xl font-bold">
+                  Zenith Agency
+                </span>
               </Link>
             </div>
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-8">
-              {navItems.filter(item => item.public || isLoggedIn).map((item) => (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    location.pathname === item.path
-                      ? "bg-white/20 text-white"
-                      : "text-white/80 hover:text-white hover:bg-white/10"
-                  }`}
-                >
-                  {item.name}
-                </Link>
-              ))}
+              {navItems
+                .filter((item) => item.public || isLoggedIn)
+                .map((item) => (
+                  <Link
+                    key={item.name}
+                    to={item.path}
+                    className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      location.pathname === item.path
+                        ? "bg-white/20 text-white"
+                        : "text-white/80 hover:text-white hover:bg-white/10"
+                    }`}
+                  >
+                    {item.name}
+                  </Link>
+                ))}
               {!isLoggedIn ? (
                 <div className="flex items-center space-x-4">
                   <Link
@@ -116,11 +142,26 @@ function Navbar() {
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className="text-white hover:text-white focus:outline-none"
               >
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg
+                  className="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
                   {isMenuOpen ? (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M6 18L18 6M6 6l12 12"
+                    />
                   ) : (
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M4 6h16M4 12h16M4 18h16"
+                    />
                   )}
                 </svg>
               </button>
@@ -132,20 +173,22 @@ function Navbar() {
         {isMenuOpen && (
           <div className="md:hidden bg-blue-700">
             <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
-              {navItems.filter(item => item.public || isLoggedIn).map((item) => (
-                <Link
-                  key={item.name}
-                  to={item.path}
-                  className={`block px-3 py-2 rounded-md text-base font-medium ${
-                    location.pathname === item.path
-                      ? "bg-blue-800 text-white"
-                      : "text-white hover:bg-blue-600"
-                  }`}
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  {item.name}
-                </Link>
-              ))}
+              {navItems
+                .filter((item) => item.public || isLoggedIn)
+                .map((item) => (
+                  <Link
+                    key={item.name}
+                    to={item.path}
+                    className={`block px-3 py-2 rounded-md text-base font-medium ${
+                      location.pathname === item.path
+                        ? "bg-blue-800 text-white"
+                        : "text-white hover:bg-blue-600"
+                    }`}
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    {item.name}
+                  </Link>
+                ))}
               {isLoggedIn ? (
                 <button
                   onClick={() => {
@@ -181,23 +224,28 @@ function Navbar() {
 
       {/* Mobile Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow md:hidden flex justify-around items-center h-16">
-        {navItems.filter(item => item.public || isLoggedIn).map((item) => (
-          <Link
-            key={item.name}
-            to={item.path}
-            className={`flex flex-col items-center justify-center flex-1 h-full text-xs font-medium transition-colors ${
-              location.pathname === item.path
-                ? "text-blue-600"
-                : "text-gray-500 hover:text-blue-600"
-            }`}
-          >
-            {navIcons[item.name]}
-            <span className="mt-1">{item.name}</span>
-          </Link>
-        ))}
+        {navItems
+          .filter((item) => item.public || isLoggedIn)
+          .map((item) => (
+            <Link
+              key={item.name}
+              to={item.path}
+              className={`flex flex-col items-center justify-center flex-1 h-full text-xs font-medium transition-colors ${
+                location.pathname === item.path
+                  ? "text-blue-600"
+                  : "text-gray-500 hover:text-blue-600"
+              }`}
+            >
+              {navIcons[item.name]}
+              <span className="mt-1">{item.name}</span>
+            </Link>
+          ))}
         {isLoggedIn && (
           <button
-            onClick={() => { logout(); navigate("/"); }}
+            onClick={() => {
+              logout();
+              navigate("/");
+            }}
             className="flex flex-col items-center justify-center flex-1 h-full text-xs font-medium text-gray-500 hover:text-red-600 transition-colors"
             style={{ background: "none", border: "none" }}
           >
