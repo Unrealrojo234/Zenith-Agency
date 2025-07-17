@@ -1,14 +1,27 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
-import { useAuthStore } from "../store/auth";
+import { useState, useEffect } from "react";
+import PocketBase from 'pocketbase';
 import { FaHome, FaTachometerAlt, FaTasks, FaMoneyBillWave, FaUser, FaLifeRing, FaSignOutAlt } from "react-icons/fa";
+
+// Initialize PocketBase client outside the component
+const pb = new PocketBase('https://zenithdb.fly.dev');
 
 function Navbar() {
   const location = useLocation();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
   const navigate = useNavigate();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [user, setUser] = useState(null);
+  const [isLoggedIn, setIsLoggedIn] = useState(pb.authStore.isValid);
+
+  // Set up auth store listener
+  useEffect(() => {
+    const unsubscribe = pb.authStore.onChange(() => {
+      setIsLoggedIn(pb.authStore.isValid);
+      setUser(pb.authStore.model);
+    }, true); // Trigger immediately with current state
+
+    return () => unsubscribe();
+  }, []);
 
   const navItems = [
     { name: "Home", path: "/", public: true },
@@ -20,12 +33,22 @@ function Navbar() {
   ];
 
   const navIcons = {
-    Home: <FaHome size={22} />, // Home icon
-    Dashboard: <FaTachometerAlt size={22} />, // Dashboard icon
-    Tasks: <FaTasks size={22} />, // Tasks icon
-    Profit: <FaMoneyBillWave size={22} />, // Profit icon
-    Account: <FaUser size={22} />, // Account icon
-    Support: <FaLifeRing size={22} />, // Support icon
+    Home: <FaHome size={22} />,
+    Dashboard: <FaTachometerAlt size={22} />,
+    Tasks: <FaTasks size={22} />,
+    Profit: <FaMoneyBillWave size={22} />,
+    Account: <FaUser size={22} />,
+    Support: <FaLifeRing size={22} />,
+  };
+
+  const logout = async () => {
+    try {
+      pb.authStore.clear();
+      window.location.reload();
+      navigate("/");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   };
 
   return (
@@ -44,7 +67,7 @@ function Navbar() {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-8">
-              {navItems.filter(item => item.public || user).map((item) => (
+              {navItems.filter(item => item.public || isLoggedIn).map((item) => (
                 <Link
                   key={item.name}
                   to={item.path}
@@ -57,7 +80,7 @@ function Navbar() {
                   {item.name}
                 </Link>
               ))}
-              {!user ? (
+              {!isLoggedIn ? (
                 <div className="flex items-center space-x-4">
                   <Link
                     to="/login"
@@ -74,7 +97,9 @@ function Navbar() {
                 </div>
               ) : (
                 <div className="flex items-center space-x-4">
-                  <span className="text-white font-semibold">{user.name}</span>
+                  <span className="text-white font-semibold">
+                    {pb.authStore.model?.name || "User"}
+                  </span>
                   <button
                     onClick={logout}
                     className="bg-yellow-400 text-blue-900 px-4 py-2 rounded-md text-sm font-semibold hover:bg-yellow-300 transition-colors shadow"
@@ -86,12 +111,77 @@ function Navbar() {
             </div>
 
             {/* Mobile menu button */}
+            <div className="md:hidden flex items-center">
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="text-white hover:text-white focus:outline-none"
+              >
+                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  {isMenuOpen ? (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  ) : (
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  )}
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Mobile menu */}
+        {isMenuOpen && (
+          <div className="md:hidden bg-blue-700">
+            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+              {navItems.filter(item => item.public || isLoggedIn).map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.path}
+                  className={`block px-3 py-2 rounded-md text-base font-medium ${
+                    location.pathname === item.path
+                      ? "bg-blue-800 text-white"
+                      : "text-white hover:bg-blue-600"
+                  }`}
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  {item.name}
+                </Link>
+              ))}
+              {isLoggedIn ? (
+                <button
+                  onClick={() => {
+                    logout();
+                    setIsMenuOpen(false);
+                  }}
+                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-600"
+                >
+                  Logout
+                </button>
+              ) : (
+                <div className="flex space-x-4 px-3 py-2">
+                  <Link
+                    to="/login"
+                    className="flex-1 text-center text-white hover:bg-blue-600 px-3 py-2 rounded-md text-base font-medium"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Login
+                  </Link>
+                  <Link
+                    to="/signup"
+                    className="flex-1 text-center bg-white text-blue-600 hover:bg-gray-100 px-3 py-2 rounded-md text-base font-medium"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    Sign Up
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </nav>
+
       {/* Mobile Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-200 shadow md:hidden flex justify-around items-center h-16">
-        {navItems.filter(item => item.public || user).map((item) => (
+        {navItems.filter(item => item.public || isLoggedIn).map((item) => (
           <Link
             key={item.name}
             to={item.path}
@@ -101,11 +191,11 @@ function Navbar() {
                 : "text-gray-500 hover:text-blue-600"
             }`}
           >
-            {navIcons[item.name as keyof typeof navIcons]}
+            {navIcons[item.name]}
             <span className="mt-1">{item.name}</span>
           </Link>
         ))}
-        {user && (
+        {isLoggedIn && (
           <button
             onClick={() => { logout(); navigate("/"); }}
             className="flex flex-col items-center justify-center flex-1 h-full text-xs font-medium text-gray-500 hover:text-red-600 transition-colors"
