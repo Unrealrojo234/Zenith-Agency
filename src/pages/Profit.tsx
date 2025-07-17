@@ -1,174 +1,273 @@
-import * as React from 'react';
-import toast from 'react-hot-toast';
-import { useEffect, useState } from 'react';
-import { useUserStore } from '../store/user';
+import * as React from "react";
+import toast from "react-hot-toast";
+import { useEffect, useState, useCallback } from "react";
+import PocketBase from "pocketbase";
+
+
+
+// Initialize PocketBase client outside the component
+const pb = new PocketBase("https://zenithdb.fly.dev");
+
 
 const Profit = () => {
-  const profile = useUserStore(s => s.profile);
-  const earnings = {
-    referrals: 900,
-    tasks: 300,
-    total: 1200,
+  const [user, setUser] = useState(null);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [formData, setFormData] = useState({
+    mpesaNumber: "",
+    withdrawAmount: "",
+    fullName: ""
+  });
+  const [errors, setErrors] = useState({
+    mpesaNumber: "",
+    withdrawAmount: "",
+    fullName: ""
+  });
+
+  // Calculate earnings from Supabase user data
+  const calculateEarnings = useCallback(() => {
+    if (!user) return {
+      referals: 0,
+      tasks: 0,
+      total: 0
+    };
+
+    // Assuming income includes both task earnings and referral earnings
+    // You may need to adjust this based on your actual data structure
+    const taskEarnings = user.income || 0;
+    const referralEarnings = user.referals || 0;
+    
+    return {
+      referals: referralEarnings,
+      tasks: taskEarnings - referralEarnings, // Assuming income includes both
+      total: taskEarnings
+    };
+  }, [user]);
+
+  const earnings = calculateEarnings();
+  const lifetimeEarnings = user?.income || 0;
+  const availableBalance = user?.balance || 0;
+
+  const fetchUserData = useCallback(async () => {
+    try {
+         const record = await pb
+          .collection("users")
+          .getOne(pb.authStore.model.id, {
+            expand: "relField1,relField2.subRelField",
+          });
+      
+        setUser(record);
+        // Initialize form with user data
+        setFormData(prev => ({
+          ...prev,
+          fullName: record.username || "",
+          mpesaNumber: record.phone || ""
+        }));
+      }
+     catch (error) {
+      console.error("Failed to fetch user data:", error);
+      setUser(null);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchUserData();
+
+  }, [fetchUserData]);
+
+  const handleInputChange = (e) => {
+    const { id, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [id]: value
+    }));
+    
   };
 
-  const [withdrawing, setWithdrawing] = React.useState(false);
-  const [mpesaNumber, setMpesaNumber] = React.useState('');
-  const [mpesaError, setMpesaError] = React.useState('');
-  const [withdrawAmount, setWithdrawAmount] = React.useState('');
-  const [amountError, setAmountError] = React.useState('');
-  const [fullName, setFullName] = React.useState(profile?.name || '');
-  const [nameError, setNameError] = React.useState('');
+  const validateForm = () => {
+    let isValid = true;
+    const newErrors = {
+      mpesaNumber: "",
+      withdrawAmount: "",
+      fullName: ""
+    };
 
-  const handleWithdraw = () => {
-    let valid = true;
-    if (!/^\d{10,}$/.test(mpesaNumber)) {
-      setMpesaError('Please enter a valid Mpesa number (at least 10 digits).');
-      valid = false;
-    } else {
-      setMpesaError('');
+    if (!/^\d{10,}$/.test(formData.mpesaNumber)) {
+      newErrors.mpesaNumber = "Please enter a valid Mpesa number (at least 10 digits).";
+      isValid = false;
     }
-    const amount = parseFloat(withdrawAmount);
-    if (!withdrawAmount || isNaN(amount) || amount < 1 || amount > availableBalance) {
-      setAmountError(`Enter an amount between KSh 1 and KSh ${availableBalance}`);
-      valid = false;
-    } else {
-      setAmountError('');
+
+    const amount = parseFloat(formData.withdrawAmount);
+    if (
+      !formData.withdrawAmount ||
+      isNaN(amount) ||
+      amount < 1 ||
+      amount > availableBalance
+    ) {
+      newErrors.withdrawAmount = `Enter an amount between KSh 1000 and KSh ${availableBalance}`;
+      isValid = false;
     }
-    if (!fullName.trim()) {
-      setNameError('Please enter your full name.');
-      valid = false;
-    } else {
-      setNameError('');
+
+    if (!formData.fullName.trim()) {
+      newErrors.fullName = "Please enter your full name.";
+      isValid = false;
     }
-    if (!valid) return;
+
+    setErrors(newErrors);
+    return isValid;
+  };
+
+  const handleWithdraw = async () => {
+    if (!validateForm()) return;
+    
     setWithdrawing(true);
-    setTimeout(() => {
+    
+    try {
+    } catch (error) {
+      console.error("Withdrawal failed:", error);
+      toast.error("Failed to process withdrawal. Please try again.");
+    } finally {
       setWithdrawing(false);
-      toast.success('Withdrawal request submitted!');
-    }, 1200);
+    }
   };
 
-  // Use real data from store
-  const earningsHistory = profile?.earningsHistory || [];
-  const paymentHistory = profile?.paymentHistory || [];
-  const lifetimeEarnings = profile?.stats?.earnings || 0;
-  const availableBalance = profile?.stats?.earnings || 0; // For demo, same as lifetime
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-[80vh]">
+        <div className="text-center">
+          <p className="text-lg">Loading profit data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[80vh] py-12">
-      <div className="bg-white rounded-2xl shadow-2xl p-10 max-w-md w-full border border-gray-100">
-        <h1 className="text-3xl font-bold mb-6 text-blue-900">Profit Overview</h1>
-        <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl shadow p-6 mb-6 border border-gray-100">
-          <div className="flex justify-between mb-2">
-            <span className="font-medium">From Referrals:</span>
-            <span className="text-blue-600 font-bold">KSh {earnings.referrals}</span>
-          </div>
-          <div className="flex justify-between mb-2">
-            <span className="font-medium">From Tasks:</span>
-            <span className="text-blue-600 font-bold">KSh {earnings.tasks}</span>
-          </div>
-          <div className="border-t my-2"></div>
-          <div className="flex justify-between text-lg">
-            <span className="font-semibold">Total Earnings:</span>
-            <span className="text-green-600 font-bold">KSh {earnings.total}</span>
-          </div>
-        </div>
-        <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl shadow p-6 mb-6 border border-gray-100">
-          <div className="flex justify-between mb-2">
-            <span className="font-medium">Lifetime Earnings:</span>
-            <span className="text-blue-600 font-bold">KSh {lifetimeEarnings}</span>
-          </div>
-          <div className="flex justify-between mb-2">
-            <span className="font-medium">Available Balance:</span>
-            <span className="text-green-600 font-bold">KSh {availableBalance}</span>
-          </div>
-        </div>
-        {/* Earnings Chart (real data) */}
-        <div className="bg-white rounded-xl shadow p-4 border border-gray-100 mb-6">
-          <h2 className="text-lg font-semibold mb-2 text-blue-900">Earnings Over Time</h2>
-          <div className="w-full h-32 bg-gradient-to-r from-blue-100 to-purple-100 rounded flex items-end gap-2 p-2">
-            {earningsHistory.map((e, i) => (
-              <div key={i} className="flex flex-col items-center justify-end" style={{height:'100%'}}>
-                <div className="bg-blue-500 rounded w-6" style={{height: `${e.amount/6}px`, minHeight: '10px'}}></div>
-                <span className="text-xs text-gray-500 mt-1">{e.date.slice(5,10)}</span>
+    <div className="flex flex-col items-center justify-center min-h-[80vh] py-8 px-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md border border-gray-100">
+        <h1 className="text-3xl font-bold mb-6 text-blue-900 text-center">
+          Profit Overview
+        </h1>
+        
+        {/* Earnings Summary */}
+        <div className="space-y-4 mb-6">
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl shadow p-4 border border-gray-100">
+            <h2 className="text-lg font-semibold mb-3 text-blue-800">Current Earnings</h2>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span>From Referals:</span>
+                <span className="font-bold">KSh {earnings.referals}</span>
               </div>
-            ))}
+              <div className="flex justify-between">
+                <span>From Tasks:</span>
+                <span className="font-bold">KSh {earnings.tasks}</span>
+              </div>
+              <div className="border-t my-2"></div>
+              <div className="flex justify-between text-lg">
+                <span className="font-semibold">Total:</span>
+                <span className="text-green-600 font-bold">KSh {earnings.total}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-xl shadow p-4 border border-gray-100">
+            <h2 className="text-lg font-semibold mb-3 text-blue-800">Balance</h2>
+            <div className="space-y-2">
+              <div className="flex justify-between">
+                <span>Lifetime Earnings:</span>
+                <span className="font-bold">KSh {lifetimeEarnings}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Available:</span>
+                <span className="text-green-600 font-bold">KSh {availableBalance}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Level:</span>
+                <span className="font-bold">{user.level}</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="mb-4">
-          <label className="block font-medium mb-1" htmlFor="fullName">Full Name</label>
-          <input
-            id="fullName"
-            type="text"
-            value={fullName}
-            onChange={e => setFullName(e.target.value)}
-            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
-            placeholder="Your full name"
-            required
-          />
-          {nameError && <div className="text-red-600 text-sm mt-1">{nameError}</div>}
+
+        {/* Withdrawal Form */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-4 text-blue-900">Withdraw Funds</h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block font-medium mb-1" htmlFor="fullName">
+                Username
+              </label>
+              <input
+                id="fullName"
+                type="text"
+                value={formData.fullName}
+                onChange={handleInputChange}
+                className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
+                placeholder="Your full name"
+                required
+              />
+              {errors.fullName && (
+                <p className="text-red-600 text-sm mt-1">{errors.fullName}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block font-medium mb-1" htmlFor="mpesaNumber">
+                Mpesa Number
+              </label>
+              <input
+                id="mpesaNumber"
+                type="tel"
+                value={formData.mpesaNumber}
+                onChange={handleInputChange}
+                className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
+                placeholder="e.g. 0712345678"
+                required
+              />
+              {errors.mpesaNumber && (
+                <p className="text-red-600 text-sm mt-1">{errors.mpesaNumber}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block font-medium mb-1" htmlFor="withdrawAmount">
+                Amount (KSh)
+              </label>
+              <input
+                id="withdrawAmount"
+                type="number"
+                min={1}
+                max={availableBalance}
+                value={formData.withdrawAmount}
+                onChange={handleInputChange}
+                className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
+                placeholder={`Up to ${availableBalance}`}
+                required
+              />
+              {errors.withdrawAmount && (
+                <p className="text-red-600 text-sm mt-1">{errors.withdrawAmount}</p>
+              )}
+            </div>
+
+            <button
+              onClick={handleWithdraw}
+              disabled={withdrawing}
+              className={`w-full py-3 rounded font-semibold transition-colors shadow ${
+                withdrawing
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-yellow-400 hover:bg-yellow-300 text-blue-900"
+              }`}
+            >
+              {withdrawing ? "Processing..." : "Withdraw Funds"}
+            </button>
+          </div>
         </div>
-        <div className="mb-4">
-          <label className="block font-medium mb-1" htmlFor="mpesaNumber">Mpesa Number</label>
-          <input
-            id="mpesaNumber"
-            type="tel"
-            value={mpesaNumber}
-            onChange={e => setMpesaNumber(e.target.value)}
-            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
-            placeholder="e.g. 0712345678"
-            required
-          />
-          {mpesaError && <div className="text-red-600 text-sm mt-1">{mpesaError}</div>}
-        </div>
-        <div className="mb-4">
-          <label className="block font-medium mb-1" htmlFor="withdrawAmount">Amount to Withdraw</label>
-          <input
-            id="withdrawAmount"
-            type="number"
-            min={1}
-            max={availableBalance}
-            value={withdrawAmount}
-            onChange={e => setWithdrawAmount(e.target.value)}
-            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 focus:border-blue-400 transition"
-            placeholder={`Up to ${availableBalance}`}
-            required
-          />
-          {amountError && <div className="text-red-600 text-sm mt-1">{amountError}</div>}
-        </div>
-        <button
-          className="w-full bg-yellow-400 text-blue-900 py-2 rounded font-semibold hover:bg-yellow-300 transition-colors shadow mb-6"
-          onClick={handleWithdraw}
-          disabled={withdrawing || !/^\d{10,}$/.test(mpesaNumber) || !withdrawAmount || isNaN(parseFloat(withdrawAmount)) || parseFloat(withdrawAmount) < 1 || parseFloat(withdrawAmount) > availableBalance || !fullName.trim()}
-        >
-          {withdrawing ? 'Processing...' : 'Withdraw' }
-        </button>
-        {/* Payment History (real data) */}
-        <div className="bg-white rounded-xl shadow p-4 border border-gray-100 mb-6">
-          <h2 className="text-lg font-semibold mb-2 text-blue-900">Payment History</h2>
-          <ul className="divide-y divide-gray-200">
-            {paymentHistory.map((p) => (
-              <li key={p.id} className="py-2 flex justify-between items-center">
-                <span>{p.date.slice(0,10)}</span>
-                <span className="font-semibold">KSh {p.amount}</span>
-                <span className={`text-xs px-2 py-1 rounded-full ${p.status === 'Completed' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{p.status}</span>
-                <span className="text-xs text-gray-500 ml-2">Ref: #{p.id}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        {/* Tips/FAQ */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h2 className="text-xl font-semibold mb-2 text-blue-900">How to Withdraw</h2>
-          <ul className="list-disc pl-5 text-gray-700 text-sm mb-2">
-            <li>Ensure your available balance is above KSh 1.</li>
-            <li>Click the Withdraw button and follow the prompts.</li>
-            <li>Withdrawals are processed instantly, but may take up to 24 hours in rare cases.</li>
-          </ul>
-          <h2 className="text-xl font-semibold mb-2 mt-4 text-blue-900">FAQ</h2>
-          <ul className="list-disc pl-5 text-gray-700 text-sm">
-            <li>Minimum withdrawal is KSh 1.</li>
-            <li>Contact support if you have any issues with your withdrawal.</li>
+
+        {/* Help Section */}
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h2 className="text-lg font-semibold mb-2 text-blue-900">Need Help?</h2>
+          <ul className="list-disc pl-5 space-y-1 text-sm text-gray-700">
+            <li>Minimum withdrawal: KSh 1000</li>
+            <li>Processing time: Instant (up to 72 hours in rare cases)</li>
+            <li>Contact support for any issues</li>
           </ul>
         </div>
       </div>
