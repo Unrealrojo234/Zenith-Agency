@@ -1,6 +1,5 @@
-import * as React from 'react';
 import { LEVELS } from '../utils/levels';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 
 const Dashboard = () => {
   // Mock user profile data
