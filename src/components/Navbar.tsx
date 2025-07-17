@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import PocketBase from "pocketbase";
 import {
   FaHome,
@@ -18,33 +18,46 @@ function Navbar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState("");
+  const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(pb.authStore.isValid);
 
-  // Set up auth store listener
-  useEffect(() => {
-    const unsubscribe = pb.authStore.onChange(() => {
-      setIsLoggedIn(pb.authStore.isValid);
-
-      const fetchUser = async () => {
+  const fetchUserData = useCallback(async () => {
+    try {
+      if (pb.authStore.isValid && pb.authStore.model) {
         const record = await pb
           .collection("users")
           .getOne(pb.authStore.model.id, {
             expand: "relField1,relField2.subRelField",
           });
-
-        // console.log(record);
-
-        setUser(record.username);
-      };
-
-      fetchUser();
-
-      setUser(pb.authStore.model.id);
-    }, true); // Trigger immediately with current state
-
-    return () => unsubscribe();
+        setUser(record);
+      }
+    } catch (error) {
+      console.error("Failed to fetch user data:", error);
+      setUser(null);
+    }
   }, []);
+
+  // Set up auth store listener
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setIsLoggedIn(pb.authStore.isValid);
+      if (pb.authStore.isValid) {
+        fetchUserData();
+      } else {
+        setUser(null);
+      }
+    };
+
+    // Set initial state
+    handleAuthChange();
+
+    // Subscribe to future changes
+    const unsubscribe = pb.authStore.onChange(handleAuthChange);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [fetchUserData]);
 
   const navItems = [
     { name: "Dashboard", path: "/dashboard", public: false },
@@ -63,15 +76,24 @@ function Navbar() {
     Support: <FaLifeRing size={22} />,
   };
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       pb.authStore.clear();
-      window.location.reload();
       navigate("/");
+      // Soft refresh instead of full page reload
+      window.location.href = window.location.href;
     } catch (error) {
       console.error("Logout failed:", error);
     }
-  };
+  }, [navigate]);
+
+  const toggleMenu = useCallback(() => {
+    setIsMenuOpen(prev => !prev);
+  }, []);
+
+  const closeMenu = useCallback(() => {
+    setIsMenuOpen(false);
+  }, []);
 
   return (
     <>
@@ -79,7 +101,7 @@ function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <Link to="/" className="flex-shrink-0 flex items-center">
+              <Link to="/" className="flex-shrink-0 flex items-center" onClick={closeMenu}>
                 <div className="w-8 h-8 bg-white rounded-full flex items-center justify-center mr-3">
                   <span className="text-blue-600 font-bold text-lg">Z</span>
                 </div>
@@ -124,7 +146,7 @@ function Navbar() {
               ) : (
                 <div className="flex items-center space-x-4">
                   <span className="text-white font-semibold">
-                    {pb.authStore.model?.name || "User"}
+                    {user?.username || user?.name || "User"}
                   </span>
                   <button
                     onClick={logout}
@@ -139,8 +161,9 @@ function Navbar() {
             {/* Mobile menu button */}
             <div className="md:hidden flex items-center">
               <button
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                onClick={toggleMenu}
                 className="text-white hover:text-white focus:outline-none"
+                aria-label="Toggle menu"
               >
                 <svg
                   className="h-6 w-6"
@@ -184,7 +207,7 @@ function Navbar() {
                         ? "bg-blue-800 text-white"
                         : "text-white hover:bg-blue-600"
                     }`}
-                    onClick={() => setIsMenuOpen(false)}
+                    onClick={closeMenu}
                   >
                     {item.name}
                   </Link>
@@ -193,7 +216,7 @@ function Navbar() {
                 <button
                   onClick={() => {
                     logout();
-                    setIsMenuOpen(false);
+                    closeMenu();
                   }}
                   className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-white hover:bg-blue-600"
                 >
@@ -204,14 +227,14 @@ function Navbar() {
                   <Link
                     to="/login"
                     className="flex-1 text-center text-white hover:bg-blue-600 px-3 py-2 rounded-md text-base font-medium"
-                    onClick={() => setIsMenuOpen(false)}
+                    onClick={closeMenu}
                   >
                     Login
                   </Link>
                   <Link
                     to="/signup"
                     className="flex-1 text-center bg-white text-blue-600 hover:bg-gray-100 px-3 py-2 rounded-md text-base font-medium"
-                    onClick={() => setIsMenuOpen(false)}
+                    onClick={closeMenu}
                   >
                     Sign Up
                   </Link>
@@ -235,6 +258,7 @@ function Navbar() {
                   ? "text-blue-600"
                   : "text-gray-500 hover:text-blue-600"
               }`}
+              onClick={closeMenu}
             >
               {navIcons[item.name]}
               <span className="mt-1">{item.name}</span>
@@ -242,10 +266,7 @@ function Navbar() {
           ))}
         {isLoggedIn && (
           <button
-            onClick={() => {
-              logout();
-              navigate("/");
-            }}
+            onClick={logout}
             className="flex flex-col items-center justify-center flex-1 h-full text-xs font-medium text-gray-500 hover:text-red-600 transition-colors"
             style={{ background: "none", border: "none" }}
           >
