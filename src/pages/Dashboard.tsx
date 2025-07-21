@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import PocketBase from "pocketbase";
-import { FiRefreshCw, FiUser, FiDollarSign, FiPieChart, FiCreditCard } from "react-icons/fi";
+import {
+  FiRefreshCw,
+  FiUser,
+  FiDollarSign,
+  FiPieChart,
+  FiCreditCard,
+} from "react-icons/fi";
 
 // Types
 interface User {
@@ -51,13 +57,13 @@ const Dashboard = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Verify authentication first
       if (!pb.authStore.isValid) {
         throw new Error("Not authenticated");
       }
-      
-      const userId = pb.authStore.model?.id;
+
+      const userId = pb.authStore.model.id;
       if (!userId) {
         throw new Error("User ID not found");
       }
@@ -66,23 +72,48 @@ const Dashboard = () => {
       const userRecord = await pb.collection("users").getOne(userId);
       setUser(userRecord);
 
-      // Fetch withdrawals and registrations in parallel
-      const [withdrawalRecords, registrationRecords] = await Promise.all([
-        pb.collection("withdrawals").getFullList({
-          filter: `uid = "${userId}"`,
-          sort: '-created',
-        }),
-        pb.collection("registrations").getFullList({
-          filter: `uid = "${userId}"`,
-          sort: '-created',
-        })
-      ]);
+      //fetching withdrawals
 
-      setWithdrawals(withdrawalRecords);
-      setRegistrations(registrationRecords);
+      try {
+        const records = await pb.collection("withdrawal").getFullList({
+          sort: "-created",
+        });
 
+        let data = [];
+
+        records.forEach((record) => {
+          if (record.uid == userId) {
+            data.push(record);
+          }
+        });
+
+        setWithdrawals(data);
+      } catch (error) {
+        console.log("Unable to fetch user's withdrawals");
+      }
+      //fetching registrations
+
+      try {
+        const records = await pb.collection("registration").getFullList({
+          sort: "-created",
+        });
+
+        let data = [];
+
+        records.forEach((record) => {
+          if (record.uid == userId) {
+            data.push(record);
+          }
+        });
+
+        setRegistrations(data);
+      } catch (error) {
+        console.log("Unable to fetch user's registrations");
+      }
+
+      console.log(withdrawals);
     } catch (err: any) {
-      setError(err.message || "Failed to fetch data");
+      // setError(err.message || "Failed to fetch data");
       console.error("API Error:", err);
     } finally {
       setLoading(false);
@@ -92,6 +123,8 @@ const Dashboard = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  // fetchData();
 
   if (loading) {
     return (
@@ -107,7 +140,7 @@ const Dashboard = () => {
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-md">
           <p className="font-bold">Error</p>
           <p>{error}</p>
-          <button 
+          <button
             onClick={fetchData}
             className="mt-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-md"
           >
@@ -120,15 +153,15 @@ const Dashboard = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
-          No user data found
+        <div className="bg-purple-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
         </div>
-      </div>
     );
   }
 
-    return (
+  return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow">
@@ -147,25 +180,25 @@ const Dashboard = () => {
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
         {/* User Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard 
+          <StatCard
             icon={<FiUser className="text-blue-500" size={24} />}
             title="Account Level"
-            value={user.level}
+            value={user.level.toString()}
             change={null}
           />
-          <StatCard 
+          <StatCard
             icon={<FiDollarSign className="text-green-500" size={24} />}
             title="Balance"
             value={`Ksh ${user.balance.toLocaleString()}`}
             change={null}
           />
-          <StatCard 
+          <StatCard
             icon={<FiPieChart className="text-purple-500" size={24} />}
             title="Investment"
             value={`Ksh ${user.investment.toLocaleString()}`}
             change={null}
           />
-          <StatCard 
+          <StatCard
             icon={<FiCreditCard className="text-yellow-500" size={24} />}
             title="Income"
             value={`Ksh ${user.income.toLocaleString()}`}
@@ -178,7 +211,9 @@ const Dashboard = () => {
           {/* Withdrawals Table */}
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Recent Withdrawals</h3>
+              <h3 className="text-lg font-medium text-gray-900">
+                Recent Withdrawals
+              </h3>
             </div>
             <div className="overflow-x-auto">
               <WithdrawalTable withdrawals={withdrawals} />
@@ -188,7 +223,9 @@ const Dashboard = () => {
           {/* Registrations Table */}
           <div className="bg-white shadow rounded-lg overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-medium text-gray-900">Registration History</h3>
+              <h3 className="text-lg font-medium text-gray-900">
+                Registration History
+              </h3>
             </div>
             <div className="overflow-x-auto">
               <RegistrationTable registrations={registrations} />
@@ -201,17 +238,29 @@ const Dashboard = () => {
 };
 
 // Helper Components
-const StatCard = ({ icon, title, value, change }: { icon: React.ReactNode, title: string, value: string | number, change: string | null }) => (
+const StatCard = ({
+  icon,
+  title,
+  value,
+  change,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  value: string | number;
+  change: string | null;
+}) => (
   <div className="bg-white overflow-hidden shadow rounded-lg">
     <div className="px-4 py-5 sm:p-6 flex items-start">
-      <div className="mr-4">
-        {icon}
-      </div>
+      <div className="mr-4">{icon}</div>
       <div>
         <dt className="text-sm font-medium text-gray-500 truncate">{title}</dt>
         <dd className="mt-1 text-3xl font-semibold text-gray-900">{value}</dd>
         {change && (
-          <div className={`mt-1 text-sm ${change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+          <div
+            className={`mt-1 text-sm ${
+              change.startsWith("+") ? "text-green-600" : "text-red-600"
+            }`}
+          >
             {change}
           </div>
         )}
@@ -224,9 +273,15 @@ const WithdrawalTable = ({ withdrawals }: { withdrawals: Withdrawal[] }) => (
   <table className="min-w-full divide-y divide-gray-200">
     <thead className="bg-gray-50">
       <tr>
-        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Amount
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Date
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Status
+        </th>
       </tr>
     </thead>
     <tbody className="bg-white divide-y divide-gray-200">
@@ -239,7 +294,7 @@ const WithdrawalTable = ({ withdrawals }: { withdrawals: Withdrawal[] }) => (
             {new Date(withdrawal.created).toLocaleDateString()}
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
-            <StatusBadge 
+            <StatusBadge
               processing={withdrawal.processing}
               declined={withdrawal.declined}
               completed={withdrawal.disbursed}
@@ -251,14 +306,26 @@ const WithdrawalTable = ({ withdrawals }: { withdrawals: Withdrawal[] }) => (
   </table>
 );
 
-const RegistrationTable = ({ registrations }: { registrations: Registration[] }) => (
+const RegistrationTable = ({
+  registrations,
+}: {
+  registrations: Registration[];
+}) => (
   <table className="min-w-full divide-y divide-gray-200">
     <thead className="bg-gray-50">
       <tr>
-        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Level</th>
-        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">MPESA Ref</th>
-        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Level
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Amount
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          MPESA Ref
+        </th>
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+          Status
+        </th>
       </tr>
     </thead>
     <tbody className="bg-white divide-y divide-gray-200">
@@ -271,10 +338,10 @@ const RegistrationTable = ({ registrations }: { registrations: Registration[] })
             Ksh {registration.amount.toLocaleString()}
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-            {registration.mpesa_ref || 'N/A'}
+            {registration.mpesa_ref || "N/A"}
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
-            <StatusBadge 
+            <StatusBadge
               processing={registration.processing}
               declined={registration.declined}
               completed={!registration.processing && !registration.declined}
@@ -286,26 +353,37 @@ const RegistrationTable = ({ registrations }: { registrations: Registration[] })
   </table>
 );
 
-const StatusBadge = ({ processing, declined, completed }: { processing: boolean, declined: boolean, completed: boolean }) => {
-  let status = '';
-  let color = '';
+const StatusBadge = ({
+  processing,
+  declined,
+  completed,
+}: {
+  processing: boolean;
+  declined: boolean;
+  completed: boolean;
+}) => {
+  let status = "";
+  let color = "";
 
-  if (processing) {
-    status = 'Processing';
-    color = 'bg-yellow-100 text-yellow-800';
+  if (completed) {
+    status = "Completed";
+    color = "bg-green-100 text-green-800";
+  } else if (processing) {
+    status = "Processing";
+    color = "bg-yellow-100 text-yellow-800";
   } else if (declined) {
-    status = 'Declined';
-    color = 'bg-red-100 text-red-800';
-  } else if (completed) {
-    status = 'Completed';
-    color = 'bg-green-100 text-green-800';
+    status = "Declined";
+    color = "bg-red-100 text-red-800";
   } else {
-    status = 'Pending';
-    color = 'bg-gray-100 text-gray-800';
+    // This case will catch any status that's not explicitly completed, processing, or declined.
+    status = "Pending";
+    color = "bg-gray-100 text-gray-800";
   }
 
   return (
-    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${color}`}>
+    <span
+      className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${color}`}
+    >
       {status}
     </span>
   );
