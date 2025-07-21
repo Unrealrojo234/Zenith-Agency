@@ -63,7 +63,7 @@ function App() {
         return;
       }
       console.error("Failed to fetch user:", err);
-      setError("Failed to load user data. Please ensure you are logged in and the server is accessible. Error: " + err.message);
+      // setError("Failed to load user data. Please ensure you are logged in and the server is accessible. Error: " + err.message);
       setUser(null);
     } finally {
       if (abortControllerRef.current === newAbortController) {
@@ -291,15 +291,11 @@ function App() {
 
         {/* No User Message */}
         {!user && !error && (
-          <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
-            <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-800 mb-2">No User Data Available</h2>
-            <p className="text-gray-600 mb-4">Please log in to view your account information.</p>
-            {/* You might want to add a real login button/link here */}
-            <button className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-              Sign In
-            </button>
+        <div className="bg-purple-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
           </div>
+        </div>
         )}
 
         {/* User Information and Edit Form */}

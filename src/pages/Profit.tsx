@@ -213,7 +213,7 @@ const Profit = () => {
         processed_at: null,
       };
 
-      await pb.collection("withdrawals").create(withdrawalData);
+      await pb.collection("withdrawal").create(withdrawalData);
 
       // Update user balance
       await pb.collection("users").update(user.id, {
@@ -260,25 +260,13 @@ const Profit = () => {
       </div>
     );
   }
-
-  if (!user) {
+ if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-[80vh]">
-        <div className="text-center bg-red-50 p-6 rounded-xl max-w-md mx-4">
-          <h2 className="text-xl font-bold text-red-600 mb-2">
-            Unable to load data
-          </h2>
-          <p className="mb-4">
-            We couldn't load your profit information. Please try again later.
-          </p>
-          <button
-            onClick={fetchUserData}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition"
-          >
-            Retry
-          </button>
+        <div className="bg-purple-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded">
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
         </div>
-      </div>
     );
   }
 
